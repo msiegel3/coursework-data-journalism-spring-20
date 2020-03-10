@@ -289,6 +289,8 @@ county_total_pills <- buyer_totals %>%
   scale_y_continuous(labels = comma) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
+  ggsave("county_total_pills.png", plot=last_plot())
+  
 ```
 
 ## Output
