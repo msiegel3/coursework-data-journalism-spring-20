@@ -70,6 +70,13 @@ We're loading five packages today.
 # Load Tidyverse, janitor and arcos, tidycensus, rvest
 # Use install.packages if necessary
 
+# install.packages('rvest')
+
+library(tidyverse)
+library(janitor)
+library(arcos)
+library(tidycensus)
+library(rvest)
 
 ```
 
@@ -104,7 +111,9 @@ mingo_url <- 'https://raw.githubusercontent.com/smussenden/spring20-data-journal
 Then, we'll pass the mingo_url to a read_tsv() function, and store it as a new object we'll call mingo_downloaded
 
 ```{r}
+
 mingo_downloaded <- read_tsv(mingo_url)
+
 ```
 
 ***Task***: A CSV (comma separated value) file with the average number pills shipped to each county in the U.S. per year between 2006 and 2012 exists at [this url](https://raw.githubusercontent.com/smussenden/spring20-data-journalism/master/labs/lab_05/data/county_pills_per_year.csv) 
@@ -113,7 +122,9 @@ Write the necessary code to download it directly from that URL and bring it into
 
 ```{r}
 
+average_pills_county_url <- 'https://raw.githubusercontent.com/smussenden/spring20-data-journalism/master/labs/lab_05/data/county_pills_per_year.csv'
 
+average_pills_county_downloaded <- read_csv(average_pills_county_url)
 
 ```
 
@@ -131,6 +142,7 @@ First, we have to store an API key to access the ARCOS API tool.
 
 # store one of our API keys as an object called key
 key <- "uO4EK6I"
+
 ```
 
 Then, we can pull down tables using different functions.  For example, the summarized_county_annual() function allows us to pull down a table with one row per county per year (between 2006 and 2012) with total pills (dosage unit) in that county in that year.  
@@ -138,15 +150,19 @@ Then, we can pull down tables using different functions.  For example, the summa
 Here, we're storing it as an object called arcos_county_pills_per_year, and cleaning up the column names. 
 
 ```{r}
+
 arcos_county_pills_per_year <- summarized_county_annual(key = key) %>%
   clean_names()
+
 ```
 
 The ARCOS API also has a table with county population estimates for each year between 2006 and 2012.  Let's pull that down and clean and standardize the names. Remember to include the key.
 
 ```{r}
+
 arcos_county_population_per_year <- county_population(key = key) %>%
   clean_names()
+
 ```
 
 
@@ -159,6 +175,7 @@ Today, I'm going to show you how to get demographic and economic information tha
 First, we need to store our census API key, using the census_api_key() function from tidycensus. You can get your own API key [here](https://api.census.gov/data/key_signup.html) or use mine (below)
 
 ```{r}
+
 # Define your census API key
 census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
 
@@ -169,8 +186,10 @@ Now, let's pull down a table with the median household income for each county in
 First, run the code, then we'll examine what's happening. 
 
 ```{r}
+
 county_median_household_income <- get_acs(geography = "county", 
               variables="B19013_001", year=2012, geometry = FALSE )
+
 ```
 
 We get a table with 5 columns: 
@@ -199,6 +218,7 @@ The census has thousands, and it can be a bit confusing.  The tidycensus has a f
 This function pulls all the avaiable variables for 2012 from the acs, with data from the previous 5 years averaged into a single estimate.  Here's a [good discussion of what that means](https://www.census.gov/data/developers/data-sets/acs-5year.html)
 
 ```{r}
+
 acs_variables <- load_variables(2012, "acs5")
 
 ```
@@ -208,6 +228,9 @@ Let's examine this table together.  Be sure to watch the video where I'll review
 ***Task***: using a similar method as we used above to create a table of county by county median household income estimates, create a table with the total estimated population of people who identify as white only and no other race in each state in 2014. The name of the label you'll need is:  Estimate!!Total!!White alone. 
 
 ```{r}
+
+state_estimated_population_white_alone <- get_acs(geography = "state", 
+              variables="B02001_002", year=2014, geometry = FALSE )
 
 ```
 
@@ -241,25 +264,31 @@ In our environment window, we see it comes in as a "nested list".  We can examin
 Now, let's strip out all the junk we don't want, and just keep the thing we want: the table with our info. We're going to modify the function we wrote above, and add a new function html_nodes('table') to just pull out the table. 
 
 ```{r}
+
 opioid_scrape <- read_html("https://www.drugabuse.gov/drugs-abuse/opioids/opioid-summaries-by-state") %>%
   html_nodes('table')
+
 ```
 
 We can examine the results in the environment window.  It kept the table head and table body, but it's kinda unreadable. Luckily, we can use the html_table() convenience function to clean it up. header=1 says to use the first row as a header. 
 
 ```{r}
+
 opioid_scrape <- read_html("https://www.drugabuse.gov/drugs-abuse/opioids/opioid-summaries-by-state") %>%
   html_nodes('table') %>%
   html_table(header=1, fill=TRUE) 
+
 ```
 
 We're getting closer.  But it's still a nested list, not super usable for our purposes. We can add an as.data.frame() function to make it a data frame. When you view it in the environment window, it looks like a dataframe now. 
 
 ```{r}
+
 opioid_scrape <- read_html("https://www.drugabuse.gov/drugs-abuse/opioids/opioid-summaries-by-state") %>%
   html_nodes('table') %>%
   html_table(header=1, fill=TRUE)  %>%
   as.data.frame()
+
 ```
 
 Okay, it's in now, but it's still kind of a mess. In next week's lab, which is dedicated to data cleaning, we'll work on cleaning this up a bit. 
@@ -268,6 +297,10 @@ Okay, it's in now, but it's still kind of a mess. In next week's lab, which is d
 
 ```{r}
 
+opioid_states_scrape <- read_html("https://www.cdc.gov/drugoverdose/data/analysis.html") %>%
+  html_nodes('table') %>%
+  html_table(header=1, fill=TRUE)  %>%
+  as.data.frame()
 
 ```
 
