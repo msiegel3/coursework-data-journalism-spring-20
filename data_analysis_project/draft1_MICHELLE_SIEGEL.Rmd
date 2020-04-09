@@ -1,0 +1,135 @@
+---
+title: "data_analysis_project_MICHELLE_SIEGEL"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#1: Load knitr.
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+
+#2: Load packages.
+
+library(tidyverse)
+library(janitor)
+library(arcos)
+library(tidycensus)
+library(plyr);
+library(dplyr)
+library(haven)
+
+```
+
+```{r}
+
+#3: Load ARCOS key.
+key <- "uO4EK6I"
+
+```
+
+```{r}
+
+#4: Load 2018 Behavioral Risk Factor Surveillance System (BRFSS) data and clean names. Data, codebook and explanation of calculated variables included found at: https://www.cdc.gov/brfss/annual_data/annual_2018.html.
+
+brfss2018 <- read_xpt("data/brfss2018.XPT_")
+
+```
+
+```{r}
+
+#5: Clean names.
+
+brfss2018 <- clean_names(brfss2018)
+
+```
+
+```{r}
+
+#6: Create working BRFSS 2018 dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state.
+
+brfss2018_full_breakdown <- brfss2018 %>%
+  select(state, rfsmok3) %>%
+  group_by(state)
+
+```
+
+```{r}
+
+#7: Create column (freq) reflecting how many participants in each state responded with each possible answer. One can infer from the explanation of calculated variables that those whose responses are classified as "1" can be considered non-smokers, while those whose responses are classified as "2" can be considered smokers. No assumptions can be made about those classified as "9."
+
+brfss2018_full_breakdown <- count(brfss2018, c("state", "rfsmok3"))
+
+```
+
+```{r}
+
+#8: Create a new dataframe, repeating step #7.
+
+brfss2018_state_totals <- brfss2018 %>%
+  select(state, rfsmok3) %>%
+  group_by(state)
+ 
+``` 
+  
+```{r}
+
+#9: Create column (freq) reflecting how many participants in each state responded.
+
+brfss2018_state_totals <- count(brfss2018, "state")
+
+```
+
+```{r}
+
+#10: Inner join the two working data frames. Create a percentage column by dividing how many participants in each state responded with each possible answer by how many participants in each state responded. Filter for smokers only.
+
+brfss2018_pre_arcos <- brfss2018_full_breakdown %>%
+  inner_join(brfss2018_state_totals, by="state") %>%
+  mutate(percent_total = freq.x/freq.y) %>%
+  filter(rfsmok3 == 2)
+
+```
+
+```{r}
+
+#11: Pull in ARCOS data and clean names.
+
+arcos <- summarized_county_annual(key = key) %>%
+  clean_names()
+
+```
+
+```{r}
+
+#12: This is where I'm stuck. I'm trying to have it so that every state has one dosage unit number -- that is, I'm trying to total all the years together for each state -- but when I try to group by buyer state, it ignores me. :(
+
+arcos_state <- arcos %>%
+  select(buyer_state, year, dosage_unit) %>%
+  group_by(buyer_state)
+
+```
+
+```{r}
+
+# LATER STEPS: Calculate pills per person for each state, like in lab 4. Inner join state_fips_master (https://github.com/kjhealy/fips-codes) to arcos_state by state_abbr/buyer_state (will involve transmuting/renaming). Inner join arcos_state to brfss2018_pre_arcos, forming brfss_working. Correlate pills per person and percentage smoker... hopefully we're learning that when we learn "relationships" this week? Either way, create a scatterplot (visualization #1) and a map (visualization #2). If need be, incorporate data cleaning steps we haven't learned yet.
+
+```
+
+```{r}
+
+# SANDBOX
+
+# https://github.com/kjhealy/fips-codes
+# WIP
+# state_fips_master <- read_csv("data/state_fips_master.csv") %>% 
+# mutate(buyer_state = state_abbr) %>%
+# mutate(state = fips) %>%
+# select(buyer_state, state)
+
+```
+
