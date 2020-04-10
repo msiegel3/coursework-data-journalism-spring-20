@@ -13,14 +13,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 
-#2: Load packages.
+#2: Load other packages.
 
 library(tidyverse)
 library(janitor)
 library(arcos)
 library(tidycensus)
-library(plyr);
-library(dplyr)
 library(haven)
 
 ```
@@ -42,94 +40,104 @@ brfss2018 <- read_xpt("data/brfss2018.XPT_")
 
 ```{r}
 
-#5: Clean names.
+#5: Store a working dataframe. Clean names.
 
-brfss2018 <- clean_names(brfss2018)
+brfss2018_working <- clean_names(brfss2018)
 
 ```
 
 ```{r}
 
-#6: Create working BRFSS 2018 dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state.
+#6: Create a new dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state and rfsmok3. Filter for smokers* only. Create column (smokers) reflecting how many participants in each state were classified as smokers.
 
-brfss2018_full_breakdown <- brfss2018 %>%
+brfss2018_smokers <- brfss2018_working %>%
   select(state, rfsmok3) %>%
-  group_by(state)
+  group_by(state, rfsmok3) %>%
+  filter(rfsmok3 == 2) %>%
+  summarize(smokers = n())
+
+# * One can infer from the explanation of calculated variables that those whose responses are classified as "1" can be considered non-smokers, while those whose responses are classified as "2" can be considered smokers. No assumptions can be made about those classified as "9."
 
 ```
 
 ```{r}
 
-#7: Create column (freq) reflecting how many participants in each state responded with each possible answer. One can infer from the explanation of calculated variables that those whose responses are classified as "1" can be considered non-smokers, while those whose responses are classified as "2" can be considered smokers. No assumptions can be made about those classified as "9."
+#7: Create a new dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state. Filter for smokers* only. Create column (participants) reflecting how many people in each state were counted.
 
-brfss2018_full_breakdown <- count(brfss2018, c("state", "rfsmok3"))
-
-```
-
-```{r}
-
-#8: Create a new dataframe, repeating step #7.
-
-brfss2018_state_totals <- brfss2018 %>%
+brfss2018_participants <- brfss2018_working %>%
   select(state, rfsmok3) %>%
-  group_by(state)
+  group_by(state) %>%
+  summarize(respondents = n())
  
 ``` 
   
 ```{r}
 
-#9: Create column (freq) reflecting how many participants in each state responded.
+#8: Inner join brfss2018_smokers and brfss2018_participants by state. Create a percentage column by dividing how many participants in each state responded with each possible answer by how many participants in each state responded. Remove "brfss2018_smokers" and "brfss2018participants."
 
-brfss2018_state_totals <- count(brfss2018, "state")
+brfss2018_working <- brfss2018_smokers %>%
+  inner_join(brfss2018_participants, by="state") %>%
+  mutate(percent_smokers = smokers/respondents)
 
-```
-
-```{r}
-
-#10: Inner join the two working data frames. Create a percentage column by dividing how many participants in each state responded with each possible answer by how many participants in each state responded. Filter for smokers only.
-
-brfss2018_pre_arcos <- brfss2018_full_breakdown %>%
-  inner_join(brfss2018_state_totals, by="state") %>%
-  mutate(percent_total = freq.x/freq.y) %>%
-  filter(rfsmok3 == 2)
+rm(brfss2018_smokers)
+rm(brfss2018_participants)
 
 ```
 
 ```{r}
 
-#11: Pull in ARCOS data and clean names.
+#9: Pull in ARCOS data on annual summarized pill totals by county (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Summarize total pills across all years for each state.
 
-arcos <- summarized_county_annual(key = key) %>%
-  clean_names()
-
-```
-
-```{r}
-
-#12: This is where I'm stuck. I'm trying to have it so that every state has one dosage unit number -- that is, I'm trying to total all the years together for each state -- but when I try to group by buyer state, it ignores me. :(
-
-arcos_state <- arcos %>%
-  select(buyer_state, year, dosage_unit) %>%
-  group_by(buyer_state)
+arcos_pills <- summarized_county_annual(key = key) %>%
+  clean_names() %>%
+  group_by(buyer_state) %>%
+  summarise(total_pills = sum(dosage_unit))
 
 ```
 
 ```{r}
 
-# LATER STEPS: Calculate pills per person for each state, like in lab 4. Inner join state_fips_master (https://github.com/kjhealy/fips-codes) to arcos_state by state_abbr/buyer_state (will involve transmuting/renaming). Inner join arcos_state to brfss2018_pre_arcos, forming brfss_working. Correlate pills per person and percentage smoker... hopefully we're learning that when we learn "relationships" this week? Either way, create a scatterplot (visualization #1) and a map (visualization #2). If need be, incorporate data cleaning steps we haven't learned yet.
+#10: Pull in ARCOS data on annual population for states between 2006 and 2014 (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Average populations across all years for each state. Remove "arcos_pills."
+
+arcos_working <- state_population(key = key) %>%
+  clean_names() %>%
+  group_by(buyer_state) %>%
+  summarise(population_average = mean(population)) %>%
+  inner_join(arcos_pills) %>%
+  mutate(pills_per_person = total_pills/population_average)
+
+rm(arcos_pills)
 
 ```
 
 ```{r}
 
-# SANDBOX
+#11: Pull in state FIPS data from the following: https://github.com/kjhealy/fips-codes. Mutate state_abbr to form buyer_state. Select buyer_state and state. Inner join arcoss_working_fips and arcos_working by buyer state. Remove "arcos working."
 
-# https://github.com/kjhealy/fips-codes
-# WIP
-# state_fips_master <- read_csv("data/state_fips_master.csv") %>% 
-# mutate(buyer_state = state_abbr) %>%
-# mutate(state = fips) %>%
-# select(buyer_state, state)
+arcos_working_fips <- read_csv("data/state_fips_master.csv") %>% 
+  mutate(buyer_state = state_abbr) %>% 
+  select(buyer_state, state) %>%
+  inner_join(arcos_working)
+
+rm(arcos_working)
+
+```
+
+```{r}
+
+#12: Inner join brfss2018_working and arcos_working_fips. Remove "arcos working_fips"
+
+brfss2018_working <- brfss2018_working %>%
+  inner_join(arcos_working_fips)
+
+rm(arcos_working_fips)
+
+```
+
+
+```{r}
+
+# LATER STEPS: Correlate pills per person and percentage smoker... hopefully we're learning that when we learn "relationships" this week? Either way, create a scatterplot (visualization #1) and a map (visualization #2). If need be, incorporate data cleaning steps we haven't learned yet.
 
 ```
 

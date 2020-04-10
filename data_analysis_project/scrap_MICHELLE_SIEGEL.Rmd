@@ -1,0 +1,28 @@
+---
+title: "scrap"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+library(tidyverse)
+library(janitor)
+library(arcos)
+library(dplyr)
+
+key <- "uO4EK6I"
+
+arcos <- summarized_county_annual(key = key) %>%
+  clean_names()
+
+arcos_state <- arcos %>%
+  select(buyer_state, year, dosage_unit) %>%
+  group_by(buyer_state) %>%
+  summarise(dosage_unit = sum(dosage_unit))
+
+```
