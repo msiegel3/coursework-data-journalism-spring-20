@@ -10,7 +10,9 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, paged.print=TRUE)
+
 ```
 
 ## Objective
@@ -75,7 +77,13 @@ We're also going to load one new package: [corrr](https://github.com/tidymodels/
 ```{r}
 
 # Load Tidyverse, janitor and arcos, tidycensus, scales and corrr
-
+# install.packages("corrr")
+library(tidyverse)
+library(janitor)
+library(arcos)
+library(tidycensus)
+library(scales)
+library(corrr)
 
 ```
 
@@ -102,8 +110,10 @@ Remember, we need to store a password of sorts -- called an API key -- that will
 Let's store the key first. 
 
 ```{r}
+
 # store one of our API keys as an object called key
 key <- "uO4EK6I"
+
 ```
 
 ### Load and Clean ARCOS data
@@ -144,6 +154,7 @@ The code below reads in the data, cleans it up a bit and removes counties where 
 We're left with about 1000 counties where we have enough data to analyze.
 
 ```{r}
+
 opioid_deaths <- read_tsv("data/2006-2012.txt") %>%
   clean_names() %>%
   filter(!str_detect(age_adjusted_rate, "Unreliable|Suppressed|Missing")) %>%
@@ -160,6 +171,7 @@ Now, let's put together our pills_poulation_table with our opioid_deaths table.
 We end up with 1066 records where we can examine the relationship. 
 
 ```{r}
+
 death_rate_pills <- pills_population %>%
   inner_join(opioid_deaths, by=c("countyfips" = "county_code"))
 
@@ -201,6 +213,7 @@ Each dot is a county, positioned according to its death rate and pills per perso
 The blue line running through it is the "line of best fit", a trendline that best explains the overall dot cloud. 
 
 ```{r}
+
 ggplot(death_rate_pills) +
   geom_point(aes(average_pills_per_person, age_adjusted_rate)) +
   geom_smooth(aes(average_pills_per_person, age_adjusted_rate), method = "lm", se = FALSE)  +
@@ -208,6 +221,7 @@ ggplot(death_rate_pills) +
   scale_x_continuous(labels = comma)  +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x="Average Annual Pills Per Person", y="age_adjusted Annual Opioid Death Rate", title="", caption = "Source: DEA ARCOS database, via Washington Post")
+
 ```
 
 How to intepret this?  
@@ -253,6 +267,7 @@ Finally, statistical significance.  We may get what looks like an interesting re
 We can examine statistical signficiance by deriving the p value. The code for this is a bit more complicated.     
 
 ```{r}
+
 # Store a dataframe with two columns, death rate, and pills rate. 
 correlation_death_pills <- death_rate_pills %>%
   ungroup() %>%
@@ -276,16 +291,19 @@ Then write up a few paragraphs on what you see.
 To get started, load the data you'll need from the Tidycensus package of median income in each U.S. county. 
 
 ```{r}
+
 census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
 # acs_variables <- load_variables(2017, "acs5" )
 
 county_median_household_income <- get_acs(geography = "county", 
               variables="B19013_001", year=2012, geometry = FALSE)
+
 ```
 
 Then, join it to our pills_population table.  We're going to do a little cleaning here, renaming the "estimate" column that comes in from Tidycensus as median_household_income, to make it more readable. We're also going to filter out the handful of counties that didn't have median_household_income data.   
 
 ```{r}
+
 pills_population_income <- pills_population %>%
   inner_join(county_median_household_income, by=c("countyfips" = "GEOID")) %>%
   rename(median_household_income = estimate) %>%
@@ -300,11 +318,30 @@ Using this joined table, pills_population_income, get to work examining relation
 
 # Group into five buckets and calculate median household income and average pills per person
 
+pills_population_income %>%
+ ungroup() %>%
+ mutate(quintile = ntile(median_household_income, 5)) %>%
+ group_by(quintile) %>%
+ summarise(median_household_income = mean(median_household_income),
+            average_pills_per_person = mean(average_pills_per_person)) 
+
+# In general, having a higher median household income predicts having a smaller sum of pills per person.
 
 ```
 
 ```{r}
+
 # Make a scatterplot with median household income on one axis, average pills per person on the other.  Each dot is a county. 
+
+ggplot(pills_population_income) +
+  geom_point(aes(average_pills_per_person, median_household_income)) +
+  geom_smooth(aes(average_pills_per_person, median_household_income), method = "lm", se = FALSE)  +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(labels = comma)  +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="Average Annual Pills Per Person", y="Median Household Income", title="", caption = "Source: DEA ARCOS database, via Washington Post")
+
+# The trend line visually reiterates the finding from the buckets calculation.
 
 ```
 
@@ -313,7 +350,20 @@ Using this joined table, pills_population_income, get to work examining relation
 
 # Calculate correlation coefficient
 
+pills_population_income %>%
+  ungroup() %>%
+  select(median_household_income, average_pills_per_person) %>%
+  correlate()
+
 # And calculate significance
+
+correlation_income_pills <- pills_population_income %>%
+  ungroup() %>%
+  select(median_household_income, average_pills_per_person) 
+
+cor.test(correlation_income_pills$median_household_income, correlation_income_pills$average_pills_per_person)
+
+# While statistically significant, the negative relationship is a weak one.
 
 ```
 
