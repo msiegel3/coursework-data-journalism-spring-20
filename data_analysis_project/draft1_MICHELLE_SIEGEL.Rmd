@@ -13,7 +13,23 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 
-#2: Load other packages.
+#2: Install packages.
+
+# install.packages("tidyverse")
+# install.packages("janitor")
+# install.packages("arcos")
+# install.packages("tidycensus")
+# install.packages("scales")
+# install.packages("corrr")
+# install.packages("mapview")
+# install.packages("ggthemes")
+# install.packages("haven")
+
+```
+
+```{r}
+
+#3: Load other packages.
 
 library(tidyverse)
 library(janitor)
@@ -29,21 +45,21 @@ library(haven)
 
 ```{r}
 
-#3: Load ARCOS key.
+#4: Load ARCOS key.
 key <- "uO4EK6I"
 
 ```
 
 ```{r}
 
-#4: Load census key.
+#5: Load census key.
 census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
 
 ```
 
 ```{r}
 
-#5: Load 2018 Behavioral Risk Factor Surveillance System (BRFSS) data and clean names. Data, codebook and explanation of calculated variables included found at: https://www.cdc.gov/brfss/annual_data/annual_2018.html.
+#6: Load 2018 Behavioral Risk Factor Surveillance System (BRFSS) data and clean names. Data, codebook and explanation of calculated variables included found at: https://www.cdc.gov/brfss/annual_data/annual_2018.html.
 
 brfss2018 <- read_xpt("data/brfss2018.XPT_")
 
@@ -51,7 +67,7 @@ brfss2018 <- read_xpt("data/brfss2018.XPT_")
 
 ```{r}
 
-#6: Store a working dataframe. Clean names.
+#7: Store a working dataframe. Clean names.
 
 brfss2018_working <- clean_names(brfss2018)
 
@@ -59,7 +75,7 @@ brfss2018_working <- clean_names(brfss2018)
 
 ```{r}
 
-#7: Create a new dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state and rfsmok3. Filter for smokers* only. Create column (smokers) reflecting how many participants in each state were classified as smokers.
+#8: Create a new dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state and rfsmok3. Filter for smokers* only. Create column (smokers) reflecting how many participants in each state were classified as smokers.
 
 brfss2018_smokers <- brfss2018_working %>%
   select(state, rfsmok3) %>%
@@ -73,7 +89,7 @@ brfss2018_smokers <- brfss2018_working %>%
 
 ```{r}
 
-#8: Create a new dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state. Filter for smokers* only. Create column (participants) reflecting how many people in each state were counted.
+#9: Create a new dataframe. Select state and rfsmok3 ("Calculated variable for adults who are current smokers"). Group by state. Filter for smokers* only. Create column (participants) reflecting how many people in each state were counted.
 
 brfss2018_participants <- brfss2018_working %>%
   select(state, rfsmok3) %>%
@@ -84,7 +100,7 @@ brfss2018_participants <- brfss2018_working %>%
   
 ```{r}
 
-#9: Inner join brfss2018_smokers and brfss2018_participants by state. Create a percentage column by dividing how many participants in each state responded with each possible answer by how many participants in each state responded. Remove "brfss2018_smokers" and "brfss2018participants."
+#10: Inner join brfss2018_smokers and brfss2018_participants by state. Create a percentage column by dividing how many participants in each state responded with each possible answer by how many participants in each state responded. Remove "brfss2018_smokers" and "brfss2018participants."
 
 brfss2018_working <- brfss2018_smokers %>%
   inner_join(brfss2018_participants, by="state") %>%
@@ -97,7 +113,7 @@ rm(brfss2018_participants)
 
 ```{r}
 
-#10: Pull in ARCOS data on annual summarized pill totals by county (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Summarize total pills across all years for each state.
+#11: Pull in ARCOS data on annual summarized pill totals by county (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Summarize total pills across all years for each state.
 
 arcos_pills <- summarized_county_annual(key = key) %>%
   clean_names() %>%
@@ -108,14 +124,14 @@ arcos_pills <- summarized_county_annual(key = key) %>%
 
 ```{r}
 
-#11: Pull in ARCOS data on annual population for states between 2006 and 2014 (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Average populations across all years for each state. Mutate "pills_per_person" variable by dividing total pills across all years for each state by average populations across all years for each state. Remove "arcos_pills."
+#12: Pull in ARCOS data on annual population for states between 2006 and 2014 (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Average populations across all years for each state. Mutate "pills_per_person" variable by dividing total pills across all years for each state by average populations across all years for each state. Remove "arcos_pills."
 
 arcos_working <- state_population(key = key) %>%
   clean_names() %>%
   group_by(buyer_state) %>%
   summarise(population_average = mean(population)) %>%
   inner_join(arcos_pills) %>%
-  mutate(pills_per_person = total_pills/population_average)
+  mutate(pills_per_person = (total_pills/population_average)/9)
 
 rm(arcos_pills)
 
@@ -123,11 +139,11 @@ rm(arcos_pills)
 
 ```{r}
 
-#12: Pull in state FIPS data from the following: https://github.com/kjhealy/fips-codes. Mutate state_abbr to form buyer_state. Select buyer_state and state. Inner join arcoss_working_fips and arcos_working by buyer state. Remove "arcos working."
+#13: Pull in state FIPS data from the following: https://github.com/kjhealy/fips-codes. Mutate state_abbr to form buyer_state. Select buyer_state and state. Inner join arcoss_working_fips and arcos_working. Remove "arcos working."
 
 arcos_working_fips <- read_csv("data/state_fips_master.csv") %>% 
   mutate(buyer_state = state_abbr) %>% 
-  select(buyer_state, state) %>%
+  select(buyer_state, state, state_name) %>%
   inner_join(arcos_working)
 
 rm(arcos_working)
@@ -136,24 +152,18 @@ rm(arcos_working)
 
 ```{r}
 
-#13: Inner join brfss2018_working and arcos_working_fips. Remove "arcos working_fips."
+#14: Inner join brfss2018_working and arcos_working_fips. Remove "arcos working_fips."
 
 brfss2018_working <- brfss2018_working %>%
   inner_join(arcos_working_fips)
 
-```
-
-```{r}
-
-#14: Create and save a scatterplot exploring the relationship between percent smokers and average pills per person.
-
-brfss2018_working$state <- as.character(as.numeric(brfss2018_working$state))
+rm(arcos_working_fips)
 
 ```
 
 ```{r}
 
-#14: Create and save a scatterplot exploring the relationship between percent smokers and average pills per person.
+#15: Create and save a scatterplot exploring the relationship between percent smokers and average pills per person.
 
 ggplot(brfss2018_working) +
   geom_point(aes(pills_per_person, percent_smokers)) +
@@ -167,7 +177,7 @@ ggplot(brfss2018_working) +
 
 ```{r}
 
-#15: Save aforementioned scatterplot.
+#16: Save aforementioned scatterplot.
 
 ggsave("brfss2018_scatterplot.png", plot=last_plot())
 
@@ -175,7 +185,7 @@ ggsave("brfss2018_scatterplot.png", plot=last_plot())
 
 ```{r}
 
-#16: Calculate the correlation coefficient.
+#17: Calculate the correlation coefficient.
 
 brfss2018_working %>%
   ungroup() %>%
@@ -186,7 +196,7 @@ brfss2018_working %>%
 
 ```{r}
 
-#17: Calculate significance.
+#18: Calculate significance. Remove brfss2018_correlation.
 
 brfss2018_correlation <- brfss2018_working %>%
   ungroup() %>%
@@ -194,11 +204,13 @@ brfss2018_correlation <- brfss2018_working %>%
 
 cor.test(brfss2018_correlation$percent_smokers, brfss2018_correlation$pills_per_person)
 
+rm(brfss2018_correlation)
+
 ```
 
 ```{r}
 
-#18: Load shifted geometry data.
+#19: Load shifted geometry data.
 
 state_geodata_shifted <- get_acs(geography = "state",
               variables = "B01001_001", geometry = TRUE, shift_geo = TRUE)
@@ -207,18 +219,35 @@ state_geodata_shifted <- get_acs(geography = "state",
 
 ```{r}
 
-#19: Inner join shifted geometry data and brfss_working.
+#20: Clean names.
 
-geo_brfss2018_working <- state_geodata_shifted %>%
- inner_join(brfss2018_working,by=c("GEOID" = "state"))
+state_geodata_shifted <- clean_names(state_geodata_shifted)
 
 ```
 
 ```{r}
 
-#20: Create and save a map exploring percent smokers across all states.
+#21: Inner join shifted geometry data and brfss_working. Remove brfss_working.
+
+geo_brfss2018_working <- state_geodata_shifted %>%
+ inner_join(brfss2018_working,by=c("name" = "state_name"))
+
+rm(brfss_working)
+rm(state_geodata_shifted)
+
+```
+
+```{r}
+
+#22: Create and save a map exploring percent smokers across all states.
 
 mapview(geo_brfss2018_working, zcol = "percent_smokers", legend = TRUE)
+
+```
+
+```{r}
+
+#23: Save aforementioned map.
 
 ggsave("brfss2018_percent_smokers.png", plot=last_plot())
 
@@ -226,34 +255,16 @@ ggsave("brfss2018_percent_smokers.png", plot=last_plot())
 
 ```{r}
 
-#21: Create and save a map exploring average pills per person across all states.
+#24: Create and save a map exploring average pills per person across all states.
 
-mapview(brfss2018_working, zcol = "pills_per_person", legend = TRUE)
+mapview(geo_brfss2018_working, zcol = "pills_per_person", legend = TRUE)
+
+```
+
+```{r}
+
+#25: Save aforementioned map.
 
 ggsave("brfss2018_pills_per_person.png", plot=last_plot())
 
 ```
-
-```{r}
-
-#19: 
-
-mapview(geo_pills_population_state_2009, zcol = "pills_per_person", legend = TRUE)
-
-```
-
-```{r}
-
-#20:
-
-geo_pills_population_state_2009 <- state_geodata_shifted %>%
- inner_join(pills_population_state_2009, by=c("GEOID" = "statefips"))
-
-```
-
-```{r}
-
-# LATER STEPS: Correlate pills per person and percentage smoker... hopefully we're learning that when we learn "relationships" this week? Either way, create a scatterplot (visualization #1) and a map (visualization #2). If need be, incorporate data cleaning steps we haven't learned yet.
-
-```
-
