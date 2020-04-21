@@ -7,22 +7,67 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
 ```{r}
 
 library(tidyverse)
 library(janitor)
 library(arcos)
 library(dplyr)
+library(tidycensus)
 
-key <- "uO4EK6I"
+```
 
-arcos <- summarized_county_annual(key = key) %>%
-  clean_names()
+```{r}
 
-arcos_state <- arcos %>%
-  select(buyer_state, year, dosage_unit) %>%
-  group_by(buyer_state) %>%
-  summarise(dosage_unit = sum(dosage_unit))
+# Define your census API key
+census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
+
+```
+
+```{r}
+
+acs_variables <- load_variables(2012, "acs5")
+
+```
+
+```{r}
+
+maryland_white_by_county <- get_acs(geography = "county", 
+              variables=c("B02001_002"), year=2018, geometry = FALSE ) %>%
+  clean_names() %>%
+  separate(name, into=c("county","state"), sep=",") %>%
+  mutate(state = str_trim(state)) %>%
+  filter(state == "Maryland")
+
+```
+
+```{r}
+
+maryland_total_by_county <- get_acs(geography = "county", 
+              variables=c("B01003_001"), year=2018, geometry = FALSE ) %>%
+  clean_names() %>%
+  separate(name, into=c("county","state"), sep=",") %>%
+  mutate(state = str_trim(state)) %>%
+  filter(state == "Maryland")
+
+```
+
+```{r}
+
+maryland_working <- maryland_total_by_county %>%
+  inner_join(maryland_white_by_county, by=c("geoid", "county", "state")) %>%
+  mutate(percent_white = estimate.y/estimate.x) %>%
+  arrange(percent_white)
+
+print(maryland_working)
+
+```
+
+```{r}
+
+maryland_total_pop <- group_by(maryland_working, "geoid") %>%
+  summarize(total = sum(estimate.x))
+
+print(maryland_total_pop)
 
 ```
