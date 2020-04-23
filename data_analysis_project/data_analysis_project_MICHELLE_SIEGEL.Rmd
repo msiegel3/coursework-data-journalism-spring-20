@@ -1,0 +1,379 @@
+---
+title: "data_analysis_project_MICHELLE_SIEGEL"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#1: Load knitr.
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+
+#2: Install packages.
+
+# install.packages("tidyverse")
+# install.packages("janitor")
+# install.packages("arcos")
+# install.packages("tidycensus")
+# install.packages("scales")
+# install.packages("rvest")
+# install.packages("corrr")
+# install.packages("mapview")
+# install.packages("ggthemes")
+# install.packages("haven")
+
+```
+
+```{r}
+
+#3: Load other packages.
+
+library(tidyverse)
+library(janitor)
+library(arcos)
+library(tidycensus)
+library(scales)
+library(rvest)
+library(corrr)
+library(mapview)
+library(ggthemes)
+library(haven)
+
+```
+
+```{r}
+
+#4: Load ARCOS key.
+key <- "uO4EK6I"
+
+```
+
+```{r}
+
+#5: Load census key.
+census_api_key("549950d36c22ff16455fe196bbbd01d63cfbe6cf")
+
+```
+
+```{r}
+
+#6: Load 2014-2018 5-year American Community Survey (ACS) variables as "acs_variables."
+acs_variables <- load_variables(2018, "acs5" )
+
+```
+
+```{r}
+
+#7: Load 2018 Behavioral Risk Factor Surveillance System (BRFSS) data. Data, codebook and explanation of calculated variables included found at: https://www.cdc.gov/brfss/annual_data/annual_2018.html.
+
+brfss2018 <- read_xpt("data/brfss2018.XPT_")
+
+```
+
+```{r}
+
+#8: Store "brfss2018" in a working dataframe, "brfss2018_working." Clean names.
+
+brfss2018_working <- clean_names(brfss2018)
+
+```
+
+```{r}
+
+#9: Create a new dataframe, "brfss2018_smokers," from "brfss2018_working." Select "state" and "rfsmok3" ("Calculated variable for adults who are current smokers"). Group by "state" and "rfsmok3." Filter for smokers* only. Create summary column ("smokers") reflecting how many participants in each state were classified as smokers.
+
+brfss2018_smokers <- brfss2018_working %>%
+  select(state, rfsmok3) %>%
+  group_by(state, rfsmok3) %>%
+  filter(rfsmok3 == 2) %>%
+  summarize(smokers = n())
+
+# * One can infer from the explanation of calculated variables that those whose responses are classified as "1" can be considered non-smokers, while those whose responses are classified as "2" can be considered smokers. No assumptions can be made about those classified as "9."
+
+```
+
+```{r}
+
+#10: Create a new dataframe, "brfss2018_participants," from "brfss2018_working." Select "state" and "rfsmok3." Group by "state." Create summary column ("participants") reflecting how many people in each state participated.
+
+brfss2018_participants <- brfss2018_working %>%
+  select(state, rfsmok3) %>%
+  group_by(state) %>%
+  summarize(participants = n())
+ 
+``` 
+  
+```{r}
+
+#11: Inner join "brfss2018_smokers" and "brfss2018_participants" to recreate "brfss2018_working." Create a "percent_smokers" column by dividing "smokers" by "participants." Select "state" and "percent_smokers." Remove "brfss2018_smokers" and "brfss2018_participants."
+
+brfss2018_working <- brfss2018_smokers %>%
+  inner_join(brfss2018_participants, by="state") %>%
+  mutate(percent_smokers = smokers/participants) %>%
+  select(state, percent_smokers)
+
+rm(brfss2018_smokers)
+rm(brfss2018_participants)
+
+```
+
+```{r}
+
+#12: Create a new dataframe, "arcos_pills," pulling in ARCOS data on annual summarized pill totals by county (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Group by "buyer_state." Summarize total pills across all years for each state ("dosage_unit"), then divide by 9 (the number of years between 2006 and 2014), to create "average_annual_pills."
+
+arcos_pills <- summarized_county_annual(key = key) %>%
+  clean_names() %>%
+  group_by(buyer_state) %>%
+  summarise(average_annual_pills = (sum(dosage_unit)/9))
+
+```
+
+```{r}
+
+#13: Create a new dataframe, "arcos_working," pulling in ARCOS data on annual population for states between 2006 and 2014 (code and explanations found at https://wpinvestigative.github.io/arcos/). Clean names. Group by "buyer_state." Average populations across all years for each state ("population_average"). Inner join "arcos_working" and "arcos_pills" to recreate "arcos_working." Create a "pills_per_person" variable by dividing "average_annual_pills" by "population_average." Select "buyer_state," "population_average" and "pills_per_person." Remove "arcos_pills."
+
+arcos_working <- state_population(key = key) %>%
+  clean_names() %>%
+  group_by(buyer_state) %>%
+  summarise(population_average = mean(population)) %>%
+  inner_join(arcos_pills) %>%
+  mutate(pills_per_person = (average_annual_pills/population_average)) %>%
+  select(buyer_state, population_average, pills_per_person)
+
+rm(arcos_pills)
+
+```
+
+```{r}
+
+#14: Create a new dataframe, "arcos_working_fips," pulling in state FIPS data from the following: https://github.com/kjhealy/fips-codes. Mutate "state_abbr" to form "buyer_state." Select "buyer_state," "state" and "state_name." Inner join "arcos_working_fips" and "arcos_working" to recreate "arcos_working_fips." Remove "arcos_working."
+
+arcos_working_fips <- read_csv("data/state_fips_master.csv") %>% 
+  mutate(buyer_state = state_abbr) %>% 
+  select(buyer_state, state, state_name) %>%
+  inner_join(arcos_working)
+
+rm(arcos_working)
+
+```
+
+```{r}
+
+#15: Inner join "brfss2018_working" and "arcos_working_fips" to recreate "brfss2018_working." Select "buyer_state," "state_name," "population_average," "percent_smokers" and "pills_per_person." Remove "arcos working_fips."
+
+brfss2018_working <- brfss2018_working %>%
+  inner_join(arcos_working_fips) %>%
+  select(buyer_state, state_name, population_average, percent_smokers, pills_per_person)
+
+rm(arcos_working_fips)
+
+```
+
+```{r}
+
+#16: Scrape data from a table on the web containing opioid-related overdose deaths per 100,000 people by state in 2016 and opioid perscriptions per 100,000 people by state in 2015 (https://web.archive.org/web/20180417193215/https://www.drugabuse.gov/drugs-abuse/opioids/opioid-summaries-by-state).
+
+opioid_scrape <- read_html("https://web.archive.org/web/20180417193215/https://www.drugabuse.gov/drugs-abuse/opioids/opioid-summaries-by-state") %>%
+  html_nodes('table') %>%
+  html_table(header=1, fill=TRUE)  %>%
+  as.data.frame() %>%
+  as_data_frame()
+
+```
+
+```{r}
+
+#17: Create a new dataframe, "opioid_scrape_working," from "opioid_scrape." Clean names. Rename "state" to "state_name" and "opioid_related_overdose_deaths_100_0001_2016" to "opioid_death_rate." Select "state_name" and "opioid_death_rate." Ensure that "opioid_death_rate" is a numeric variable. Remove "opioid_scrape."
+
+opioid_scrape_working <- opioid_scrape %>%
+  clean_names() %>%
+  rename(state_name = state) %>%
+  rename(opioid_death_rate = opioid_related_overdose_deaths_100_0001_2016) %>%
+  select(state_name, opioid_death_rate) %>%
+  mutate(opioid_death_rate = as.numeric(opioid_death_rate))
+
+rm(opioid_scrape)
+
+```
+
+```{r}
+
+#18: Inner join "opioid_scrape_working" and "brfss2018_working" to recreate "brfss2018_working." Remove "opioid_scrape_working."
+
+brfss2018_working <- brfss2018_working %>%
+  inner_join(opioid_scrape_working)
+
+rm(opioid_scrape_working)
+
+```
+
+```{r}
+
+#19: Create a new dataframe, "state_median_household_income," pulling in median household income data ("B19013_001") by state from the 2014-2018 5-year ACS. Clean names. Rename "name" to "state_name" and "estimate" to "median_household_income."
+
+state_median_household_income <- get_acs(geography = "state", 
+              variables="B19013_001", year=2018, geometry = FALSE) %>%
+  clean_names() %>%
+  rename(state_name = name) %>%
+  rename(median_household_income = estimate)
+
+```
+
+```{r}
+
+#20: Inner join "state_median_household_income" to "brfss2018_working" to recreate "brfss2018_working." Select so that "geoid" comes first, then every other variable, and subtract "variable" and "moe." Remove "state_median_household_income."
+
+brfss2018_working <- brfss2018_working %>%
+  inner_join(state_median_household_income) %>%
+  select(geoid, everything(), -variable, -moe)
+
+rm(state_median_household_income)
+
+```
+
+```{r}
+
+#21: Create a new dataframe, "bachelors_or_higher," pulling in an estimated number of people with a bachelor's degree or higher ("B23006_023") by state from the 2014-2018 5-year ACS. Clean names. Rename "name" to "state_name" and "estimate" to "total_bachelors_or_higher."
+
+bachelors_or_higher <- get_acs(geography = "state", 
+              variables="B23006_023", year=2018, geometry = FALSE) %>%
+  clean_names() %>%
+  rename(state_name = name) %>%
+  rename(total_bachelors_or_higher = estimate)
+
+```
+
+```{r}
+
+#22: Inner join "bachelors_or_higher" to "brfss2018_working" to recreate "brfss2018_working." Select so that "geoid" comes first, then every other variable, and subtract "variable" and "moe." Create a "percent_bachelors_or_higher" variable by dividing "total_bachelors_or_higher" by "population_average." Select everything, then subtract "total_bachelors_or_higher" and "population_average." Remove "bachelors_or_higher."
+
+brfss2018_working <- brfss2018_working %>%
+  inner_join(bachelors_or_higher) %>%
+  select(geoid, everything(), -variable, -moe) %>%
+  mutate(percent_bachelors_or_higher = (total_bachelors_or_higher/population_average)) %>%
+  select(everything(), -total_bachelors_or_higher, -population_average)
+
+rm(bachelors_or_higher)
+
+```
+
+```{r}
+
+#23: Create and save a scatterplot exploring the relationship between "percent_smokers" and "pills_per_person."
+
+ggplot(brfss2018_working) +
+  geom_point(aes(pills_per_person, percent_smokers)) +
+  geom_smooth(aes(pills_per_person, percent_smokers), method = "lm", se = FALSE)  +
+  scale_y_continuous(labels = percent) +
+  scale_x_continuous(labels = comma)  +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="Annual Average Pills Per Person", y="Percent Smokers", title="", caption = "Source: ARCOS via WaPo and BRFSS via CDC")
+
+ggsave("brfss2018_percent_smokers_pills_per_person.png", plot=last_plot())
+
+```
+
+```{r}
+
+#24: Calculate the correlation coefficient.
+
+brfss2018_working %>%
+  ungroup() %>%
+  select(percent_smokers, pills_per_person) %>%
+  correlate()
+
+```
+
+```{r}
+
+#25: Calculate significance.
+
+brfss2018_percent_smokers_pills_per_person <- brfss2018_working %>%
+  ungroup() %>%
+  select(percent_smokers, pills_per_person) 
+
+cor.test(brfss2018_percent_smokers_pills_per_person$percent_smokers, brfss2018_percent_smokers_pills_per_person$pills_per_person)
+
+```
+
+```{r}
+
+#26: Create and save a scatterplot exploring the relationship between "percent_smokers" and "median_household_income."
+
+ggplot(brfss2018_working) +
+  geom_point(aes(median_household_income, percent_smokers)) +
+  geom_smooth(aes(median_household_income, percent_smokers), method = "lm", se = FALSE)  +
+  scale_y_continuous(labels = percent) +
+  scale_x_continuous(labels = comma)  +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="Median Household Income", y="Percent Smokers", title="", caption = "Source: 2014-2018 5-year ACS and BRFSS via CDC")
+
+ggsave("brfss2018_percent_smokers_median_household_income.png", plot=last_plot())
+
+```
+
+```{r}
+
+#27: Calculate the correlation coefficient.
+
+brfss2018_working %>%
+  ungroup() %>%
+  select(median_household_income, percent_smokers) %>%
+  correlate()
+
+```
+
+```{r}
+
+#28: Calculate significance.
+
+brfss2018_percent_smokers_median_household_income <- brfss2018_working %>%
+  ungroup() %>%
+  select(median_household_income, percent_smokers) 
+
+cor.test(brfss2018_percent_smokers_median_household_income$median_household_income, brfss2018_percent_smokers_median_household_income$percent_smokers)
+
+```
+
+```{r}
+
+#29: Create and save a scatterplot exploring the relationship between "percent_smokers" and "percent_bachelors_or_higher."
+
+ggplot(brfss2018_working) +
+  geom_point(aes(percent_smokers, percent_bachelors_or_higher)) +
+  geom_smooth(aes(percent_smokers, percent_bachelors_or_higher), method = "lm", se = FALSE)  +
+  scale_y_continuous(labels = percent) +
+  scale_x_continuous(labels = percent)  +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="Percent Smokers", y="Percent Bachelors or Higher", title="", caption = "Source: 2014-2018 5-year ACS and BRFSS via CDC")
+
+ggsave("brfss2018_percent_smokers_percent_bachelors_or_higher.png", plot=last_plot())
+
+```
+
+```{r}
+
+#30: Calculate the correlation coefficient.
+
+brfss2018_working %>%
+  ungroup() %>%
+  select(percent_smokers, percent_bachelors_or_higher) %>%
+  correlate()
+
+```
+
+```{r}
+
+#31: Calculate significance.
+
+brfss2018_percent_smokers_percent_bachelors_or_higher <- brfss2018_working %>%
+  ungroup() %>%
+  select(percent_smokers, percent_bachelors_or_higher) 
+
+cor.test(brfss2018_percent_smokers_percent_bachelors_or_higher$percent_smokers, brfss2018_percent_smokers_percent_bachelors_or_higher$percent_bachelors_or_higher)
+
+```
