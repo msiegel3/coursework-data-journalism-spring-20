@@ -237,7 +237,7 @@ rm(state_median_household_income)
 
 ```{r}
 
-#21: Create a new dataframe, "bachelors_or_higher," pulling in an estimated number of people with a bachelor's degree or higher ("B23006_023") by state from the 2014-2018 5-year ACS. Clean names. Rename "name" to "state_name" and "estimate" to "total_bachelors_or_higher."
+#21: Create a new dataframe, "bachelors_or_higher," pulling in an estimated number of people 25+ years of age with a bachelor's degree or higher ("B23006_023") by state from the 2014-2018 5-year ACS. Clean names. Rename "name" to "state_name" and "estimate" to "total_bachelors_or_higher."
 
 bachelors_or_higher <- get_acs(geography = "state", 
               variables="B23006_023", year=2018, geometry = FALSE) %>%
@@ -298,6 +298,8 @@ brfss2018_percent_smokers_pills_per_person <- brfss2018_working %>%
 
 cor.test(brfss2018_percent_smokers_pills_per_person$percent_smokers, brfss2018_percent_smokers_pills_per_person$pills_per_person)
 
+# Analysis: In general, states in which a higher percentage of the population smokes received more opioids per person between 2006 and 2014.
+
 ```
 
 ```{r}
@@ -337,6 +339,8 @@ brfss2018_percent_smokers_median_household_income <- brfss2018_working %>%
 
 cor.test(brfss2018_percent_smokers_median_household_income$median_household_income, brfss2018_percent_smokers_median_household_income$percent_smokers)
 
+# Analysis: In general, states in which a higher percentage of the population smokes have lower median household incomes.
+
 ```
 
 ```{r}
@@ -375,5 +379,7 @@ brfss2018_percent_smokers_percent_bachelors_or_higher <- brfss2018_working %>%
   select(percent_smokers, percent_bachelors_or_higher) 
 
 cor.test(brfss2018_percent_smokers_percent_bachelors_or_higher$percent_smokers, brfss2018_percent_smokers_percent_bachelors_or_higher$percent_bachelors_or_higher)
+
+# Analysis: In general, in states where a higher percentage of the population smokes, a lower percentage of the population 25+ years of age possesses a bachelor's degree or higher.
 
 ```
